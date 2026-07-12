@@ -278,7 +278,7 @@ public class MostCommonAlcohol {
             "Question 2 - Most common alcohol percentage"
         );
 
-        Path outputPath = new Path("duy-gop");
+        Path outputPath = new Path("nhom5-gop");
 
         FileSystem fileSystem =
             FileSystem.get(configuration);
