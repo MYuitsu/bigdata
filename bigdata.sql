@@ -55,7 +55,7 @@ SELECT
         WHEN alcoholpercentage < 7 THEN 'medium'
         ELSE 'high'
     END AS alcohol_level
-FROM beers
+FROM beer
 WHERE id IS NOT NULL;
 
 -- View hiển thị các loại bia mạnh từ 7% trở lên
