@@ -185,11 +185,12 @@ public class MostCommonAlcohol {
      * tất cả các nồng độ cồn.
      *
      * Trong reduce():
-     * - Tính tổng số bia của từng nồng độ.
-     * - Ghi nhớ số lượng lớn nhất.
+        * - Tính tổng số bia của từng nồng độ.
+        * - Xuất luôn kết quả COUNT (tương đương Job 1).
+        * - Ghi nhớ số lượng lớn nhất.
      *
      * Trong cleanup():
-     * - Xuất nồng độ phổ biến nhất.
+        * - Xuất kết quả MAX (tương đương Job 2).
      */
     public static class MaximumReducer extends
         Reducer<DoubleWritable, IntWritable,
@@ -219,6 +220,14 @@ public class MostCommonAlcohol {
             }
 
             double percentage = alcohol.get();
+
+            outputKey.set(
+                "COUNT\t" + formatPercentage(percentage)
+            );
+
+            outputValue.set(total);
+
+            context.write(outputKey, outputValue);
 
             /*
              * Nếu số lượng hiện tại lớn hơn giá trị lớn nhất:
@@ -254,7 +263,7 @@ public class MostCommonAlcohol {
                 mostCommonPercentages) {
 
                 outputKey.set(
-                    formatPercentage(percentage)
+                    "MAX\t" + formatPercentage(percentage)
                 );
 
                 context.write(
