@@ -1,6 +1,8 @@
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -32,10 +34,14 @@ public class MostCommonAlcohol {
     public static class AlcoholMapper extends
         Mapper<LongWritable, Text, DoubleWritable, IntWritable> {
 
-        private static final IntWritable ONE = new IntWritable(1);
-
         private final DoubleWritable outputKey =
             new DoubleWritable();
+
+        private final IntWritable outputValue =
+            new IntWritable();
+
+        private final Map<Double, Integer> localCounts =
+            new HashMap<>();
 
         @Override
         protected void map(
@@ -51,18 +57,21 @@ public class MostCommonAlcohol {
                 return;
             }
 
-            /*
-             * Tách tối đa thành 5 cột:
-             *
-             * 0: id
-             * 1: make
-             * 2: type
-             * 3: alcoholpercentage
-             * 4: brewery
-             */
-            String[] columns = line.split(",", 5);
+            int firstComma = line.indexOf(',');
+            int secondComma =
+                firstComma < 0
+                ? -1
+                : line.indexOf(',', firstComma + 1);
+            int thirdComma =
+                secondComma < 0
+                ? -1
+                : line.indexOf(',', secondComma + 1);
+            int fourthComma =
+                thirdComma < 0
+                ? -1
+                : line.indexOf(',', thirdComma + 1);
 
-            if (columns.length < 5) {
+            if (fourthComma < 0) {
                 context.getCounter(
                     "BEER_DATA",
                     "INVALID_COLUMN_COUNT"
@@ -71,7 +80,7 @@ public class MostCommonAlcohol {
                 return;
             }
 
-            String id = columns[0].trim();
+            String id = line.substring(0, firstComma).trim();
 
             // Bỏ qua dòng tiêu đề
             if ("id".equalsIgnoreCase(id)) {
@@ -87,7 +96,10 @@ public class MostCommonAlcohol {
              *
              * đều trở thành "6".
              */
-            String alcoholText = columns[3].trim();
+            String alcoholText = line.substring(
+                thirdComma + 1,
+                fourthComma
+            ).trim();
 
             if (alcoholText.isEmpty()) {
                 context.getCounter(
@@ -102,15 +114,28 @@ public class MostCommonAlcohol {
                 double alcohol =
                     Double.parseDouble(alcoholText);
 
-                outputKey.set(alcohol);
-
-                context.write(outputKey, ONE);
+                localCounts.merge(alcohol, 1, Integer::sum);
 
             } catch (NumberFormatException exception) {
                 context.getCounter(
                     "BEER_DATA",
                     "INVALID_ALCOHOL"
                 ).increment(1);
+            }
+        }
+
+        @Override
+        protected void cleanup(
+            Context context
+        ) throws IOException, InterruptedException {
+
+            for (Map.Entry<Double, Integer> entry :
+                localCounts.entrySet()) {
+
+                outputKey.set(entry.getKey());
+                outputValue.set(entry.getValue());
+
+                context.write(outputKey, outputValue);
             }
         }
     }
@@ -272,6 +297,67 @@ public class MostCommonAlcohol {
 
         Configuration configuration =
             new Configuration();
+
+        // Giảm dữ liệu shuffle để giảm thời gian truyền mạng.
+        configuration.setBoolean(
+            "mapreduce.map.output.compress",
+            true
+        );
+
+        configuration.set(
+            "mapreduce.map.output.compress.codec",
+            "org.apache.hadoop.io.compress.DefaultCodec"
+        );
+
+        configuration.setFloat(
+            "mapreduce.job.reduce.slowstart.completedmaps",
+            0.9f
+        );
+
+        // Bật Uber task cho job nhỏ để hạn chế phải chờ cấp reducer container.
+        configuration.setBoolean(
+            "mapreduce.job.ubertask.enable",
+            true
+        );
+
+        configuration.setInt(
+            "mapreduce.job.ubertask.maxmaps",
+            9
+        );
+
+        configuration.setInt(
+            "mapreduce.job.ubertask.maxreduces",
+            1
+        );
+
+        // Đặt default memory thấp để dễ schedule; vẫn cho phép override bằng -D.
+        if (configuration.get("mapreduce.map.memory.mb") == null) {
+            configuration.setInt(
+                "mapreduce.map.memory.mb",
+                512
+            );
+        }
+
+        if (configuration.get("mapreduce.map.java.opts") == null) {
+            configuration.set(
+                "mapreduce.map.java.opts",
+                "-Xmx384m"
+            );
+        }
+
+        if (configuration.get("mapreduce.reduce.memory.mb") == null) {
+            configuration.setInt(
+                "mapreduce.reduce.memory.mb",
+                512
+            );
+        }
+
+        if (configuration.get("mapreduce.reduce.java.opts") == null) {
+            configuration.set(
+                "mapreduce.reduce.java.opts",
+                "-Xmx384m"
+            );
+        }
 
         Job job = Job.getInstance(
             configuration,
