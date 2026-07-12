@@ -3,6 +3,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.DoubleWritable;
 import org.apache.hadoop.io.IntWritable;
@@ -254,17 +255,16 @@ public class MostCommonAlcohol {
     public static void main(String[] args)
         throws Exception {
 
-        if (args.length != 2) {
+        if (args.length != 1) {
             System.err.println(
                 "Usage: hadoop jar most-common-alcohol.jar "
-                + "MostCommonAlcohol <input> <output>"
+                + "MostCommonAlcohol <input>"
             );
 
             System.err.println(
                 "Example: hadoop jar most-common-alcohol.jar "
                 + "MostCommonAlcohol "
-                + "/input/input1/data.csv "
-                + "/output/question2"
+                + "/input/input1/data.csv"
             );
 
             System.exit(1);
@@ -277,6 +277,15 @@ public class MostCommonAlcohol {
             configuration,
             "Question 2 - Most common alcohol percentage"
         );
+
+        Path outputPath = new Path("duy-gop");
+
+        FileSystem fileSystem =
+            FileSystem.get(configuration);
+
+        if (fileSystem.exists(outputPath)) {
+            fileSystem.delete(outputPath, true);
+        }
 
         job.setJarByClass(
             MostCommonAlcohol.class
@@ -325,7 +334,7 @@ public class MostCommonAlcohol {
 
         FileOutputFormat.setOutputPath(
             job,
-            new Path(args[1].trim())
+            outputPath
         );
 
         System.exit(
